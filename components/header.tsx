@@ -33,10 +33,16 @@ export function Header() {
         data-testid="header"
       >
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-4xl md:text-5xl font-bold text-center mb-2 tracking-wider" data-testid="main-title">
+          <h1
+            className="text-4xl md:text-5xl font-bold text-center mb-2 tracking-wider"
+            data-testid="main-title"
+          >
             FIGURAS VALORANT
           </h1>
-          <p className="text-center text-red-200 text-sm md:text-base mb-6" data-testid="subtitle">
+          <p
+            className="text-center text-red-200 text-sm md:text-base mb-6"
+            data-testid="subtitle"
+          >
             SELECCIONA TU AGENTE FAVORITO
           </p>
 
@@ -44,17 +50,20 @@ export function Header() {
             <div className="flex gap-2">
               {!isLoggedIn ? (
                 <>
+                  {/* 🔹 Botón de Login con testid actualizado */}
                   <button
                     onClick={() => setShowLoginModal(true)}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-bold text-sm transition-colors"
-                    data-testid="login-button"
+                    data-testid="open-login"
                   >
                     INICIAR SESIÓN
                   </button>
+
+                  {/* 🔹 Botón de Registro con testid actualizado */}
                   <button
                     onClick={() => setShowRegisterModal(true)}
                     className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded font-bold text-sm transition-colors"
-                    data-testid="register-button"
+                    data-testid="open-register"
                   >
                     REGISTRAR
                   </button>
@@ -90,6 +99,7 @@ export function Header() {
         </div>
       </header>
 
+      {/* 🔹 Modal de Login */}
       <AuthModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
@@ -101,6 +111,7 @@ export function Header() {
         }}
       />
 
+      {/* 🔹 Modal de Registro */}
       <AuthModal
         isOpen={showRegisterModal}
         onClose={() => setShowRegisterModal(false)}
@@ -112,7 +123,11 @@ export function Header() {
         }}
       />
 
-      <CartModal isOpen={showCartModal} onClose={() => setShowCartModal(false)} />
+      {/* 🔹 Modal del carrito */}
+      <CartModal
+        isOpen={showCartModal}
+        onClose={() => setShowCartModal(false)}
+      />
     </>
   )
 }
