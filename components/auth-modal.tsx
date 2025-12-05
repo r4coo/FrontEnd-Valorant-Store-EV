@@ -141,7 +141,7 @@ export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: Au
       };
 
       try {
-        const response = await fetchWithRetry(`${API_BASE_URL}/usuarios/login`, {
+        const response = await fetchWithRetry(`${API_BASE_URL}/usuarios`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(loginData),
