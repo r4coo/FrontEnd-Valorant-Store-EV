@@ -29,9 +29,9 @@ export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: Au
   // 'message' para validaciones de formulario o mensajes de éxito
   const [message, setMessage] = useState<string | null>(null)
 
-  // Obtén la URL base de la API (simulando un proceso.env)
-  // Nota: En un entorno de Canvas, se simula que esta variable existe.
-  const API_BASE_URL = "https://tu-api-backend.com/api" // Usamos un placeholder para la simulación
+  // Obtén la URL base de la API
+  // NOTA: Se ha actualizado para usar la variable de entorno real
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BACK
 
   // Si el modal no está abierto, no renderizar nada
   if (!isOpen) return null
@@ -43,8 +43,9 @@ export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: Au
     setError(null)
     setMessage(null)
 
-    if (!API_BASE_URL || API_BASE_URL.includes("placeholder")) {
-      setError("Error: La URL del backend no está configurada o es un placeholder. Revisa tu configuración.")
+    // La comprobación ahora verifica si la variable de entorno está definida
+    if (!API_BASE_URL) {
+      setError("Error: La URL del backend (NEXT_PUBLIC_API_BACK) no está definida. Por favor, configúrala.")
       return
     }
 
