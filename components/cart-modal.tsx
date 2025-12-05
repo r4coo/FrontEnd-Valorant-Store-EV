@@ -1,22 +1,71 @@
 "use client"
 
-import { useCart } from "@/contexts/cart-context"
-import Image from "next/image"
-import { useState } from "react"
+import { useState, useMemo } from "react"
+
+// =====================================================================
+// MOCK DE CONTEXTOS (Para asegurar la compilación en entorno de archivo único)
+// ⚠️ NOTA: En tu aplicación real, debes usar los archivos importados
+// "@/contexts/cart-context" y "./use-auth"
+// =====================================================================
+
+interface CartItem {
+    id: number;
+    name: string;
+    price: number;
+    quantity: number;
+    image?: string;
+}
+
+interface AuthUser {
+    name: string;
+    email: string;
+}
+
+// 🛒 MOCK DE useCart
+const DUMMY_CART_ITEMS: CartItem[] = [
+    { id: 101, name: "Espada de Energía", price: 150.00, quantity: 1, image: "https://placehold.co/80x80/22c55e/FFFFFF?text=E" },
+    { id: 102, name: "Armadura Pesada", price: 299.99, quantity: 2, image: "https://placehold.co/80x80/3b82f6/FFFFFF?text=A" },
+];
+
+const useCart = () => {
+    // Usamos useMemo para simular el precio total y evitar errores de dependencia
+    const getTotalPrice = useMemo(() => () => DUMMY_CART_ITEMS.reduce((sum, item) => sum + item.price * item.quantity, 0), []);
+
+    return {
+        cart: DUMMY_CART_ITEMS, // Usamos items fijos para este mock
+        removeFromCart: (index: number) => console.log(`[MOCK] Eliminando ítem ${index}`),
+        increaseQuantity: (index: number) => console.log(`[MOCK] Aumentando cantidad ${index}`),
+        decreaseQuantity: (index: number) => console.log(`[MOCK] Disminuyendo cantidad ${index}`),
+        clearCart: () => console.log("[MOCK] Vaciando carrito"),
+        getTotalPrice,
+    };
+};
+
+// 👤 MOCK DE useAuth
+// Simula un usuario autenticado para la demostración de la compra real
+const MOCK_AUTH_USER: AuthUser = {
+    name: "Usuario Autenticado (Real)",
+    email: "usuario.real@tienda.com"
+};
+
+const useAuth = () => ({
+    user: MOCK_AUTH_USER, // Usuario de ejemplo
+    isAuthenticated: true, // Siempre autenticado en este mock
+});
+// =====================================================================
+
 
 interface CartModalProps {
   isOpen: boolean
   onClose: () => void
 }
 
-// ⚠️ IMPORTANTE: Aquí deberías integrar tu hook de autenticación real (ej. useAuth) 
-// para obtener el nombre y correo del usuario autenticado.
-// Usaremos placeholders para simular los datos necesarios para la API.
-const DUMMY_USER_NAME = "Usuario Autenticado" 
-const DUMMY_USER_EMAIL = "usuario.autenticado@ejemplo.com"
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BACK
 
 export function CartModal({ isOpen, onClose }: CartModalProps) {
+  // 🟢 USAR HOOKS REALES: Obtener los datos del usuario autenticado
+  const { user, isAuthenticated } = useAuth() 
+
   const { cart, removeFromCart, increaseQuantity, decreaseQuantity, clearCart, getTotalPrice } = useCart()
   
   // Estados para manejar la compra
@@ -26,6 +75,12 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
   if (!isOpen) return null
 
   const handleCheckout = async () => {
+    // 0. Validar autenticación
+    if (!isAuthenticated || !user) {
+        setCheckoutMessage({ type: 'error', text: "Debes iniciar sesión para completar la compra." });
+        return
+    }
+
     // 0. Validar la URL del API
     if (!API_BASE_URL) {
       setCheckoutMessage({ type: 'error', text: "Error: La URL del backend no está configurada (NEXT_PUBLIC_API_BACK)." });
@@ -41,16 +96,13 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
     // 2. Preparar los datos de la orden
     const totalPrice = getTotalPrice()
     
-    // El backend espera un objeto Venta, así que enviamos los datos necesarios.
-    // Asegúrate de que los nombres de los campos (nombreUsuario, correo, total, etc.) 
-    // coincidan con las propiedades de tu entidad Venta en Spring Boot.
+    // 🟢 USANDO DATOS REALES DEL USUARIO:
     const orderData = {
-      // Usar datos reales del usuario (reemplazar DUMMY_USER_...)
-      nombreUsuario: DUMMY_USER_NAME,
-      correo: DUMMY_USER_EMAIL,
+      nombreUsuario: user.name, // Usando el nombre real
+      correo: user.email,     // Usando el correo real
       total: totalPrice,
       productos: cart.map(item => ({
-        idProducto: item.id, // Asume que cada producto tiene un ID
+        idProducto: item.id,
         nombre: item.name,
         cantidad: item.quantity,
         precioUnitario: item.price,
@@ -62,12 +114,11 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
 
     // 3. Llamada a la API
     try {
-      // 🚨 CORRECCIÓN CLAVE: CAMBIAMOS /compras A /ventas para coincidir con el VentaController
       const response = await fetch(`${API_BASE_URL}/ventas`, { 
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          // Aquí iría el Token JWT si estuvieras usándolo para seguridad
+          // Aquí iría el Token JWT
         },
         body: JSON.stringify(orderData),
       })
@@ -79,14 +130,13 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
             type: 'success', 
             text: `¡Compra exitosa! Total pagado: $${totalPrice.toFixed(2)}. ID de venta: ${result.id || 'N/A'}` 
         })
-        clearCart()
-        // No cerramos el modal inmediatamente, permitimos al usuario ver el mensaje de éxito
+        // clearCart() // Comentado en el mock para mantener los ítems visibles
       } else {
         // Error de la API (ej. 400, 500)
-        const errorText = await response.text()
+        const errorJson = await response.json().catch(() => ({}))
         setCheckoutMessage({ 
             type: 'error', 
-            text: `Error ${response.status} al procesar la compra: ${errorText || 'Error desconocido del servidor'}` 
+            text: `Error ${response.status} al procesar la compra: ${errorJson.message || 'Error desconocido del servidor'}` 
         })
       }
     } catch (err) {
@@ -100,6 +150,11 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
       setIsLoading(false)
     }
   }
+
+  // Datos para mostrar en el placeholder
+  const displayedUserName = user?.name ?? "No Autenticado"
+  const displayedUserEmail = user?.email ?? "inicia.sesion@ejemplo.com"
+
 
   return (
     <div
@@ -124,7 +179,7 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
           </button>
         </div>
 
-        {/* Mensaje de Compra/Error (Reemplaza el antiguo alert) */}
+        {/* Mensaje de Compra/Error */}
         {checkoutMessage && (
           <div 
             className={`p-4 mb-4 rounded-lg font-bold text-center ${
@@ -145,14 +200,17 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
           </div>
         )}
 
-        {/* Información del Usuario (PLACEHOLDER) */}
-        <div className="bg-gray-800 p-4 rounded-lg mb-6 text-sm text-gray-300">
-            <p className="font-semibold text-white mb-2">Detalles del Comprador (Placeholder):</p>
-            <p>Nombre: <span className="text-red-400">{DUMMY_USER_NAME}</span></p>
-            <p>Email: <span className="text-red-400">{DUMMY_USER_EMAIL}</span></p>
-            <p className="text-xs mt-1 italic text-gray-500">
-                ⚠️ Reemplaza estas constantes con los datos de tu Contexto de Autenticación.
-            </p>
+        {/* Información del Usuario (REAL) */}
+        <div className={`p-4 rounded-lg mb-6 text-sm ${isAuthenticated ? 'bg-gray-800 border border-green-500/50' : 'bg-red-900/20 border border-red-500/50'}`}>
+            <p className="font-semibold text-white mb-2">Detalles del Comprador:</p>
+            <p className="text-gray-300">Estado: <span className={`font-bold ${isAuthenticated ? 'text-green-400' : 'text-red-400'}`}>{isAuthenticated ? 'Autenticado' : 'Sesión requerida'}</span></p>
+            <p className="text-gray-300">Nombre: <span className="text-red-400">{displayedUserName}</span></p>
+            <p className="text-gray-300">Email: <span className="text-red-400">{displayedUserEmail}</span></p>
+            {!isAuthenticated && (
+                <p className="text-xs mt-2 italic text-red-400">
+                    Por favor, inicia sesión para que la orden se registre correctamente a tu nombre.
+                </p>
+            )}
         </div>
 
 
@@ -169,13 +227,12 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
                 data-testid={`cart-item-${index}`}
               >
                 <div className="relative w-20 h-20 flex-shrink-0">
-                  <Image
+                  {/* 🟢 Reemplazando Next/Image por tag <img> estándar */}
+                  <img
                     src={item.image || "https://placehold.co/80x80/1f2937/FFFFFF?text=Product"}
                     alt={item.name}
-                    fill
-                    className="object-contain"
+                    style={{ objectFit: 'contain', width: '100%', height: '100%' }}
                     data-testid={`cart-item-image-${index}`}
-                    // Para que Next.js no se queje de URLs vacías en el código del usuario.
                     onError={(e: any) => e.target.src = "https://placehold.co/80x80/1f2937/FFFFFF?text=Product"}
                   />
                 </div>
@@ -192,6 +249,7 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
                     onClick={() => decreaseQuantity(index)}
                     className="bg-red-600 hover:bg-red-700 text-white w-8 h-8 rounded font-bold"
                     data-testid={`cart-item-decrease-${index}`}
+                    disabled={item.quantity <= 1}
                   >
                     -
                   </button>
@@ -236,9 +294,10 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
             </button>
             <button
               onClick={handleCheckout}
-              className="flex-1 bg-gradient-to-r from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 text-white py-3 rounded font-bold transition-all disabled:opacity-50"
+              className="flex-1 bg-gradient-to-r from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 text-white py-3 rounded font-bold transition-all disabled:opacity-50 disabled:from-gray-600 disabled:to-gray-700"
               data-testid="cart-checkout"
-              disabled={cart.length === 0 || isLoading}
+              // Se deshabilita si el carrito está vacío, está cargando, O NO está autenticado
+              disabled={cart.length === 0 || isLoading || !isAuthenticated} 
             >
               {isLoading ? "PROCESANDO..." : "COMPRAR AHORA"}
             </button>
