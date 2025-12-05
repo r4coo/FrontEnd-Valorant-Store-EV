@@ -1,4 +1,8 @@
+"use client"
+
 import { useState, type FormEvent } from "react"
+// 1. 🟢 Importar el hook de autenticación
+import { useAuth } from "@/contexts/auth-context" 
 
 // Definición de las props del componente
 interface AuthModalProps {
@@ -14,6 +18,9 @@ interface AuthModalProps {
  * Maneja la lógica del formulario, validaciones locales y llamadas a la API
  */
 export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: AuthModalProps) {
+  // 2. 🟢 Obtener la función loginUser del contexto
+  const { loginUser } = useAuth() 
+
   // Estado para los datos del formulario
   const [formData, setFormData] = useState({
     name: "",
@@ -30,7 +37,6 @@ export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: Au
   const [message, setMessage] = useState<string | null>(null)
 
   // Obtén la URL base de la API
-  // NOTA: Se ha actualizado para usar la variable de entorno real
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BACK
 
   // Si el modal no está abierto, no renderizar nada
@@ -43,7 +49,6 @@ export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: Au
     setError(null)
     setMessage(null)
 
-    // La comprobación ahora verifica si la variable de entorno está definida
     if (!API_BASE_URL) {
       setError("Error: La URL del backend (NEXT_PUBLIC_API_BACK) no está definida. Por favor, configúrala.")
       return
@@ -75,6 +80,7 @@ export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: Au
 
       // 3. LLAMADA AL BACKEND (REGISTRO)
       try {
+        // NOTA: El registro no inicia sesión automáticamente, solo crea el usuario.
         const response = await fetch(`${API_BASE_URL}/usuarios`, {
           method: "POST",
           headers: {
@@ -86,24 +92,23 @@ export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: Au
         // 4. MANEJO DE RESPUESTA (REGISTRO)
         if (response.ok) {
           setMessage("¡Registro exitoso! Ahora puedes iniciar sesión.")
-          // ➡️ LÓGICA DEL MODAL REESTABLECIDA Y LIMPIEZA
-          onSuccess() // Indica éxito para cualquier lógica externa (si aplica)
-          setFormData({ name: "", email: "", password: "", confirmPassword: "" })
+          onSuccess() 
+          setFormData({ name: "", email: "", password: "", confirmPassword: "" }) 
           onSwitchMode() // Cambia al modo Login automáticamente
         } else {
-          // Manejo de errores 4xx o 5xx del servidor
           const errorJson = await response.json().catch(() => ({ message: 'Error desconocido' }))
           const errorMessage = `Error ${response.status}: ${errorJson.message || 'Error en el servidor.'}`
           setError(`Error al registrar: ${errorMessage}`)
         }
       } catch (err) {
-        // Manejo de errores de red
         console.error("Error de red/servidor:", err)
         setError("No se pudo conectar con el servidor. Verifica la URL de la API.")
       } finally {
         setIsLoading(false)
       }
     } else {
+      // --- LÓGICA DE LOGIN ---
+
       // 1. VALIDACIONES LOCALES (LOGIN)
       if (!formData.email || !formData.password) {
         setMessage("Por favor, completa el correo y la contraseña.")
@@ -131,14 +136,21 @@ export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: Au
 
         // 4. MANEJO DE RESPUESTA (LOGIN)
         if (response.ok) {
-          // La respuesta puede contener un token JWT o datos del usuario (no implementado aquí)
-          const data = await response.json() // Usar 'data' si se necesita guardar el token
+          // 4a. 🟢 Obtener la respuesta (que contiene nombre y correo)
+          const data = await response.json() 
 
-          // ➡️ LÓGICA DEL MODAL REESTABLECIDA Y LIMPIEZA
+          // 4b. 🟢 Llamar a la función del contexto para GUARDAR la sesión
+          // Asumimos que la respuesta tiene 'nombreUsuario' y 'correo'
+          loginUser({
+              name: data.nombreUsuario, 
+              email: data.correo,
+          })
+
           setMessage("¡Inicio de sesión exitoso!")
-          onSuccess() // Cierra el modal
+          onSuccess() // Cierra el modal (o ejecuta lógica externa)
           setFormData({ name: "", email: "", password: "", confirmPassword: "" }) // Limpia el formulario
         } else {
+          // 4c. Manejo de error si el login falla (ej. credenciales incorrectas)
           const errorJson = await response.json().catch(() => ({ message: 'Credenciales inválidas' }))
           const errorMessage = `Error ${response.status}: ${errorJson.message || 'Credenciales inválidas.'}`
           setError(`Error al iniciar sesión: ${errorMessage}`)
