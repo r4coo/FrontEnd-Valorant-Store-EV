@@ -1,8 +1,10 @@
+// app/layout.tsx
 import type React from "react"
 import type { Metadata } from "next"
 import { Press_Start_2P } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { CartProvider } from "@/contexts/cart-context"
+import { AuthProvider } from "@/contexts/auth-context" 
 import "./globals.css"
 
 const pressStart2P = Press_Start_2P({
@@ -25,7 +27,10 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={`${pressStart2P.variable} antialiased`}>
-        <CartProvider>{children}</CartProvider>
+        {/* 2. 🟢 Envolver CartProvider con AuthProvider */}
+        <AuthProvider> 
+            <CartProvider>{children}</CartProvider>
+        </AuthProvider>
         <Analytics />
       </body>
     </html>
