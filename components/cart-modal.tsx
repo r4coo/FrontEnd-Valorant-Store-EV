@@ -40,6 +40,10 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
 
     // 2. Preparar los datos de la orden
     const totalPrice = getTotalPrice()
+    
+    // El backend espera un objeto Venta, así que enviamos los datos necesarios.
+    // Asegúrate de que los nombres de los campos (nombreUsuario, correo, total, etc.) 
+    // coincidan con las propiedades de tu entidad Venta en Spring Boot.
     const orderData = {
       // Usar datos reales del usuario (reemplazar DUMMY_USER_...)
       nombreUsuario: DUMMY_USER_NAME,
@@ -58,7 +62,8 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
 
     // 3. Llamada a la API
     try {
-      const response = await fetch(`${API_BASE_URL}/compras`, { // Endpoint asumido: /compras
+      // 🚨 CORRECCIÓN CLAVE: CAMBIAMOS /compras A /ventas para coincidir con el VentaController
+      const response = await fetch(`${API_BASE_URL}/ventas`, { 
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -72,7 +77,7 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
         const result = await response.json()
         setCheckoutMessage({ 
             type: 'success', 
-            text: `¡Compra exitosa! Total pagado: $${totalPrice.toFixed(2)}. ID de orden: ${result.id || 'N/A'}` 
+            text: `¡Compra exitosa! Total pagado: $${totalPrice.toFixed(2)}. ID de venta: ${result.id || 'N/A'}` 
         })
         clearCart()
         // No cerramos el modal inmediatamente, permitimos al usuario ver el mensaje de éxito
