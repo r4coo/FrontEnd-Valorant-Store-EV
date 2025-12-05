@@ -1,105 +1,102 @@
 // contexts/auth-context.tsx
-"use client" // Es crucial para usar hooks como useState
+"use client"
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 
-// Define la estructura de los datos del usuario
+// 1. 🟢 Definimos la clave de almacenamiento
+const AUTH_STORAGE_KEY = "valorant_auth_user";
+
 interface User {
   name: string;
   email: string;
 }
 
-// Define la estructura del contexto de autenticación
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  // Funciones para manejar la sesión
-  login: (name: string, email: string) => void; 
+  // 2. 🟢 Función login: Ahora recibe los datos del usuario desde el modal
+  loginUser: (data: User) => void; 
   logout: () => void;
 }
 
-// Clave para guardar el usuario en el almacenamiento local (persistencia básica)
-const AUTH_STORAGE_KEY = "auth_user" 
-
-// Crear el contexto
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Proveedor del contexto
 interface AuthProviderProps {
   children: ReactNode;
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-  // Inicializamos el estado del usuario como null
   const [user, setUser] = useState<User | null>(null);
+  const [isAuthLoaded, setIsAuthLoaded] = useState(false); // Para asegurar que cargamos solo una vez
 
-  // 🟢 EFECTO 1: Cargar sesión desde localStorage al inicio (para recordar al usuario)
+  // EFECTO 1: Cargar sesión desde localStorage al montar
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
       if (storedUser) {
         try {
-          setUser(JSON.parse(storedUser));
+          const loadedUser: User = JSON.parse(storedUser);
+          setUser(loadedUser);
         } catch (error) {
           console.error("Error al parsear el usuario almacenado:", error);
-          localStorage.removeItem(AUTH_STORAGE_KEY); // Limpiar datos corruptos
+          localStorage.removeItem(AUTH_STORAGE_KEY);
         }
       } else {
-        // Establecer un usuario de DEMO si no hay sesión real, 
-        // para que se vean los detalles en el modal si no hay login
+        // Usuario de DEMO solo si no hay sesión guardada
         setUser({ 
           name: 'Usuario Autenticado (DEMO)', 
           email: 'usuario.autenticado@ejemplo.com' 
         });
       }
+      setIsAuthLoaded(true);
     }
   }, []);
 
-  // 🟢 EFECTO 2: Guardar sesión en localStorage cada vez que el estado 'user' cambia
+  // EFECTO 2: Guardar sesión en localStorage cada vez que 'user' cambia
   useEffect(() => {
-    if (typeof window !== 'undefined' && user) {
-      // Guardamos solo si hay un usuario logueado (no el DEMO)
+    if (isAuthLoaded && typeof window !== 'undefined' && user) {
+      // Solo guardar si no es el usuario de DEMO
       if (user.email !== 'usuario.autenticado@ejemplo.com') {
           localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+      } else {
+          // Si por alguna razón el usuario vuelve a DEMO, lo borramos de persistencia
+          localStorage.removeItem(AUTH_STORAGE_KEY);
       }
     }
-  }, [user]);
+  }, [user, isAuthLoaded]);
+  
+  // 3. 🟢 Implementación de loginUser: Solo se encarga de guardar el usuario en el contexto/storage
+  const loginUser = useCallback((data: User) => {
+    setUser(data);
+  }, []);
 
-
-  const login = (name: string, email: string) => {
-    const newUser = { name, email };
-    setUser(newUser);
-    // En una app real, aquí guardarías el JWT en una cookie HTTP-only.
-  };
-
-  const logout = () => {
+  const logout = useCallback(() => {
     setUser(null);
     if (typeof window !== 'undefined') {
         localStorage.removeItem(AUTH_STORAGE_KEY);
     }
-    // Opcional: Volver al usuario de DEMO para rellenar el modal
+    // Volver al usuario de DEMO
     setUser({ 
         name: 'Usuario Autenticado (DEMO)', 
         email: 'usuario.autenticado@ejemplo.com' 
     });
-  };
-
-  // Se considera autenticado si existe un usuario y no es el placeholder de DEMO
+  }, []);
+  
+  // Se considera autenticado si existe un usuario y NO es el placeholder de DEMO
   const isAuthenticated = !!user && user.email !== 'usuario.autenticado@ejemplo.com';
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, loginUser, logout }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-// Hook personalizado para usar el contexto
+// 4. 🟢 Asegúrate de usar useAuth para exportar loginUser
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    // Este error solo ocurriría si no usas el provider en el layout
-    throw new Error('useAuth debe ser usado dentro de un AuthProvider'); 
+    throw new Error('useAuth debe ser usado dentro de un AuthProvider');
   }
   return context;
 };
