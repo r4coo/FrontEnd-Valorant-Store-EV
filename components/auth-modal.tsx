@@ -1,8 +1,12 @@
-import React, { useState, useEffect, type FormEvent } from "react";
-// Importamos todos los íconos necesarios de lucide-react
-import { 
-  LogIn, User, Mail, Zap, Lock, AlertTriangle, LogOut, Loader2, X 
-} from 'lucide-react'; 
+
+import { useState } from "react"
+import { useCart } from "@/contexts/cart-context"
+
+// Importación CORREGIDA: se usa importación por defecto (sin llaves)
+import AuthModal from "./auth-modal" 
+
+import { CartModal } from "./cart-modal"
+import { ShoppingCart, User, LogOut, UserPlus, LogIn } from "lucide-react"
 
 // ⚠️ Constante de la URL de tu backend
 const API_BASE_URL = "https://backend-production-566e.up.railway.app";
