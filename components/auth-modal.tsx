@@ -1,12 +1,9 @@
+import React, { useState, useEffect, FormEvent } from "react";
+// Importaciones de íconos necesarias
+import { ShoppingCart, User, LogOut, UserPlus, LogIn, X, Mail, Lock, AlertTriangle, Zap, Loader2 } from "lucide-react";
+// Supongo que tienes un context de carrito, pero lo dejo como un placeholder para que el código compile
+// import { useCart } from "@/contexts/cart-context"; 
 
-import { useState } from "react"
-import { useCart } from "@/contexts/cart-context"
-
-// Importación CORREGIDA: se usa importación por defecto (sin llaves)
-import AuthModal from "./auth-modal" 
-
-import { CartModal } from "./cart-modal"
-import { ShoppingCart, User, LogOut, UserPlus, LogIn } from "lucide-react"
 
 // ⚠️ Constante de la URL de tu backend
 const API_BASE_URL = "https://backend-production-566e.up.railway.app";
@@ -17,13 +14,13 @@ const API_BASE_URL = "https://backend-production-566e.up.railway.app";
  * Función para realizar la llamada API con reintentos.
  * Útil para mitigar problemas de red o fallos temporales del servidor.
  */
-const fetchWithRetry = async (url: string, options: RequestInit, retries = 3) => {
+const fetchWithRetry = async (url, options, retries = 3) => {
   for (let i = 0; i < retries; i++) {
     try {
       const response = await fetch(url, options);
       // Incluimos errores 4xx si no son el 401/403 ya que el backend puede dar 400s de negocio.
-      if (response.ok || response.status < 500) { 
-          return response;
+      if (response.ok || response.status < 500) {
+        return response;
       }
       // Si es un error 5xx, podría ser temporal (fallo de servidor), intentamos de nuevo.
       throw new Error(`Server Error (${response.status})`);
@@ -43,15 +40,9 @@ const fetchWithRetry = async (url: string, options: RequestInit, retries = 3) =>
 
 // --- COMPONENTE MODAL DE AUTENTICACIÓN ---
 
-interface AuthModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  mode: "login" | "register";
-  onSuccess: (userData: any) => void; 
-  onSwitchMode: () => void;
-}
-
-function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: AuthModalProps) {
+function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }) {
+  // Los tipos de TypeScript se eliminan para que sea un componente JSX simple, pero se mantiene la estructura
+  // de las propiedades que recibes, asumiendo 'any' para la compatibilidad rápida.
   
   const [formData, setFormData] = useState({
     name: "",
@@ -61,18 +52,19 @@ function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: AuthModal
   });
 
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
   
+  // Si el modal no está abierto, no renderiza nada
   if (!isOpen) return null;
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.id]: e.target.value });
     setError(null);
     setSuccessMessage(null);
   };
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
     setSuccessMessage(null);
@@ -98,7 +90,7 @@ function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: AuthModal
       };
 
       try {
-        const response = await fetchWithRetry(`${API_BASE_URL}/usuarios`, { 
+        const response = await fetchWithRetry(`${API_BASE_URL}/usuarios`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(registerData),
@@ -133,8 +125,8 @@ function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: AuthModal
       };
 
       try {
-        // 🔥 CORRECCIÓN CLAVE: Usando el endpoint /usuarios/login
-        const response = await fetchWithRetry(`${API_BASE_URL}/usuarios/login`, { 
+        // 🔥 Usando el endpoint /usuarios/login
+        const response = await fetchWithRetry(`${API_BASE_URL}/usuarios/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(loginData),
@@ -142,6 +134,7 @@ function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: AuthModal
 
         if (response.ok) {
           const userData = await response.json();
+          // Guarda la sesión en localStorage
           localStorage.setItem('user_session', JSON.stringify(userData));
           
           setSuccessMessage("¡Inicio de sesión exitoso!");
@@ -149,6 +142,7 @@ function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: AuthModal
           setTimeout(() => {
             onSuccess(userData);
             setFormData({ name: "", email: "", password: "", confirmPassword: "" });
+            onClose(); // Cierra el modal después del éxito
           }, 1000);
           
         } else {
@@ -165,11 +159,13 @@ function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: AuthModal
     }
   };
 
+  // Deshabilita el cierre y los botones si está cargando o hay un mensaje de éxito/error
   const isAuthEnabled = !isLoading && !successMessage;
 
   return (
     <div
       className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 transition-opacity duration-300 backdrop-blur-sm"
+      // Cierra solo si no está en proceso
       onClick={isAuthEnabled ? onClose : undefined}
       role="dialog"
       aria-modal="true"
@@ -310,8 +306,8 @@ function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: AuthModal
 
 export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<"login" | "register">("login");
-  const [userData, setUserData] = useState<any | null>(null);
+  const [authMode, setAuthMode] = useState("login");
+  const [userData, setUserData] = useState(null);
 
   // 1. Cargar la sesión desde localStorage al inicio
   useEffect(() => {
@@ -327,7 +323,7 @@ export default function App() {
     }
   }, []);
 
-  const handleLoginSuccess = (user: any) => {
+  const handleLoginSuccess = (user) => {
     setUserData(user);
     setIsModalOpen(false);
   };
