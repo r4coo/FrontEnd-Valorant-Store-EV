@@ -16,7 +16,7 @@ export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: Au
     confirmPassword: "",
   })
 
-  // Nuevos estados para manejar el loading y el error del API
+  // Estados para manejar el loading y el error del API
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -30,7 +30,7 @@ export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: Au
     setError(null)
 
     if (mode === "register") {
-      // 1. VALIDACIONES LOCALES
+      // 1. VALIDACIONES LOCALES (REGISTRO)
       if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
         alert("Por favor, completa todos los campos")
         return
@@ -49,7 +49,7 @@ export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: Au
         return
       }
 
-      // 2. PREPARACIÓN DE DATOS PARA EL BACKEND
+      // 2. PREPARACIÓN DE DATOS PARA EL BACKEND (REGISTRO)
       const registerData = {
         nombreUsuario: formData.name,
         correo: formData.email,
@@ -58,7 +58,7 @@ export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: Au
 
       setIsLoading(true)
 
-      // 3. LLAMADA AL BACKEND
+      // 3. LLAMADA AL BACKEND (REGISTRO)
       try {
         const response = await fetch(`${API_BASE_URL}/usuarios`, {
           method: "POST",
@@ -68,23 +68,21 @@ export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: Au
           body: JSON.stringify(registerData),
         })
 
-        // 4. MANEJO DE RESPUESTA
+        // 4. MANEJO DE RESPUESTA (REGISTRO)
         if (response.ok) {
           alert("¡Registro exitoso! Ya puedes iniciar sesión.")
 
           // ➡️ LÓGICA DEL MODAL REESTABLECIDA Y LIMPIEZA
-          onSuccess() 
+          onSuccess()
           setFormData({ name: "", email: "", password: "", confirmPassword: "" })
-          onSwitchMode() 
+          onSwitchMode()
         } else {
-          // Manejo de errores 4xx o 5xx del servidor
           const errorText = await response.text()
           const errorMessage = `Error ${response.status}: ${errorText || 'Error desconocido'}`
           setError(errorMessage)
           alert(`Error al registrar: ${errorMessage}`)
         }
       } catch (err) {
-        // Manejo de errores de red
         console.error("Error de red/servidor:", err)
         setError("No se pudo conectar con el servidor. Verifica la URL y la configuración de CORS.")
         alert("No se pudo conectar con el servidor. Intenta de nuevo.")
@@ -92,16 +90,63 @@ export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: Au
         setIsLoading(false)
       }
     } else {
-      // Lógica de Login (por completar con llamada a API)
+      // =========================================================
+      // 🚀 LÓGICA DE INICIO DE SESIÓN (LOGIN) - IMPLEMENTADA AQUÍ
+      // =========================================================
+      
+      // 1. VALIDACIONES LOCALES (LOGIN)
       if (!formData.email || !formData.password) {
-        alert("Por favor, completa todos los campos")
+        alert("Por favor, completa el correo y la contraseña.")
         return
       }
-      alert("¡Inicio de sesión exitoso! (Demo)")
 
-      // ➡️ LÓGICA DEL MODAL REESTABLECIDA para Login (Si la llamada al API de Login fuera exitosa)
-      onSuccess()
-      setFormData({ name: "", email: "", password: "", confirmPassword: "" })
+      if (!API_BASE_URL) {
+        setError("Error: La URL del backend no está configurada (NEXT_PUBLIC_API_BACK)")
+        return
+      }
+
+      // 2. PREPARACIÓN DE DATOS PARA EL BACKEND (LOGIN)
+      const loginData = {
+        correo: formData.email,
+        password: formData.password,
+      }
+
+      setIsLoading(true)
+
+      // 3. LLAMADA AL BACKEND (LOGIN)
+      try {
+        // ASUMIMOS EL ENDPOINT /usuarios/login para la autenticación
+        const response = await fetch(`${API_BASE_URL}/usuarios/login`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(loginData),
+        })
+
+        // 4. MANEJO DE RESPUESTA (LOGIN)
+        if (response.ok) {
+          // La respuesta puede contener un token JWT o datos del usuario
+          const data = await response.json() 
+          
+          alert("¡Inicio de sesión exitoso!")
+
+          // ➡️ LÓGICA DEL MODAL REESTABLECIDA Y LIMPIEZA
+          onSuccess() // Cierra el modal
+          setFormData({ name: "", email: "", password: "", confirmPassword: "" }) // Limpia el formulario
+        } else {
+          const errorText = await response.text()
+          const errorMessage = `Error ${response.status}: ${errorText || 'Credenciales inválidas o error desconocido'}`
+          setError(errorMessage)
+          alert(`Error al iniciar sesión: ${errorMessage}`)
+        }
+      } catch (err) {
+        console.error("Error de red/servidor:", err)
+        setError("No se pudo conectar con el servidor. Verifica la URL y la configuración de CORS.")
+        alert("No se pudo conectar con el servidor. Intenta de nuevo.")
+      } finally {
+        setIsLoading(false)
+      }
     }
   }
 
