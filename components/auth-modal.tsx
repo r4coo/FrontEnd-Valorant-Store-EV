@@ -1,306 +1,347 @@
-import React, { useState, useEffect } from "react";
-// Importaciones de React necesarias:
-// Nota: FormEvent no se importa directamente desde 'react', sino que se infiere o se usa el tipo global en JSX
-import { FormEvent } from "react"; 
+import { useState, type FormEvent } from "react"
 
-// Importación COMPLETA de TODOS los íconos de Lucide usados:
-import { 
-  User, LogOut, UserPlus, LogIn, 
-  X, Mail, Lock, AlertTriangle, 
-  Zap, Loader2 
-} from "lucide-react"; 
-
-// ⚠️ Constante de la URL de tu backend
-const API_BASE_URL = "https://backend-production-566e.up.railway.app";
-
-// --- FUNCIÓN DE UTILIDAD: Fetch con Reintentos (Exponential Backoff) ---
+// Definición de las props del componente
+interface AuthModalProps {
+  isOpen: boolean
+  onClose: () => void
+  mode: "login" | "register"
+  onSuccess: () => void
+  onSwitchMode: () => void
+}
 
 /**
- * Función para realizar la llamada API con reintentos.
- * Útil para mitigar problemas de red o fallos temporales del servidor.
+ * Componente Modal de Autenticación (Login y Registro)
+ * Maneja la lógica del formulario, validaciones locales y llamadas a la API
  */
-const fetchWithRetry = async (url, options, retries = 3) => {
-  for (let i = 0; i < retries; i++) {
-    try {
-      const response = await fetch(url, options);
-      // Incluimos errores 4xx si no son el 401/403 ya que el backend puede dar 400s de negocio.
-      if (response.ok || response.status < 500) {
-        return response;
-      }
-      // Si es un error 5xx, podría ser temporal (fallo de servidor), intentamos de nuevo.
-      throw new Error(`Server Error (${response.status})`);
-    } catch (error) {
-      if (i < retries - 1) {
-        const delay = Math.pow(2, i) * 1000; // 1s, 2s, 4s
-        await new Promise(resolve => setTimeout(resolve, delay));
-        console.warn(`[API] Reintento ${i + 1} para ${url}. Esperando ${delay}ms...`);
-      } else {
-        throw error; // Lanza el error después del último intento
-      }
-    }
-  }
-  throw new Error('Máximo de reintentos alcanzado.');
-};
-
-
-// --- COMPONENTE MODAL DE AUTENTICACIÓN ---
-
-function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }) {
-  
+export function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }: AuthModalProps) {
+  // Estado para los datos del formulario
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
     confirmPassword: "",
-  });
+  })
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [successMessage, setSuccessMessage] = useState(null);
-  
-  // Si el modal no está abierto, no renderiza nada
-  if (!isOpen) return null;
+  // Estados para manejar el loading y los mensajes de feedback
+  const [isLoading, setIsLoading] = useState(false)
+  // 'error' para errores graves de API/Red
+  const [error, setError] = useState<string | null>(null)
+  // 'message' para validaciones de formulario o mensajes de éxito
+  const [message, setMessage] = useState<string | null>(null)
 
-  const handleInputChange = (e) => {
-    setFormData({ ...formData, [e.target.id]: e.target.value });
-    setError(null);
-    setSuccessMessage(null);
-  };
+  // Obtén la URL base de la API (simulando un proceso.env)
+  // Nota: En un entorno de Canvas, se simula que esta variable existe.
+  const API_BASE_URL = "https://tu-api-backend.com/api" // Usamos un placeholder para la simulación
 
-  // El tipo FormEvent se utiliza aquí (implícitamente FormEvent<HTMLFormElement>)
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
-    setSuccessMessage(null);
-    setIsLoading(true);
+  // Si el modal no está abierto, no renderizar nada
+  if (!isOpen) return null
+
+  // Función para manejar el envío del formulario
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    // Limpiar errores y mensajes al inicio de un nuevo intento
+    setError(null)
+    setMessage(null)
+
+    if (!API_BASE_URL || API_BASE_URL.includes("placeholder")) {
+      setError("Error: La URL del backend no está configurada o es un placeholder. Revisa tu configuración.")
+      return
+    }
 
     if (mode === "register") {
-      // 🚀 LÓGICA DE REGISTRO
+      // 1. VALIDACIONES LOCALES (REGISTRO)
       if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
-        setError("Por favor, completa todos los campos.");
-        setIsLoading(false);
-        return;
-      }
-      if (formData.password.length < 6) {
-        setError("La contraseña debe tener al menos 6 caracteres.");
-        setIsLoading(false);
-        return;
+        setMessage("Por favor, completa todos los campos.")
+        return
       }
       if (formData.password !== formData.confirmPassword) {
-        setError("Las contraseñas no coinciden.");
-        setIsLoading(false);
-        return;
+        setMessage("Las contraseñas no coinciden.")
+        return
       }
-      
+      if (formData.password.length < 6) {
+        setMessage("La contraseña debe tener al menos 6 caracteres.")
+        return
+      }
+
+      // 2. PREPARACIÓN DE DATOS PARA EL BACKEND (REGISTRO)
       const registerData = {
         nombreUsuario: formData.name,
         correo: formData.email,
         password: formData.password,
-      };
+      }
 
+      setIsLoading(true)
+
+      // 3. LLAMADA AL BACKEND (REGISTRO)
       try {
-        const response = await fetchWithRetry(`${API_BASE_URL}/usuarios`, {
+        const response = await fetch(`${API_BASE_URL}/usuarios`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify(registerData),
-        });
+        })
 
+        // 4. MANEJO DE RESPUESTA (REGISTRO)
         if (response.ok) {
-          setSuccessMessage("¡Registro exitoso! Ahora puedes iniciar sesión.");
-          setFormData({ name: "", email: formData.email, password: "", confirmPassword: "" });
-          setTimeout(() => { onSwitchMode(); }, 1500);
+          setMessage("¡Registro exitoso! Ahora puedes iniciar sesión.")
+          // ➡️ LÓGICA DEL MODAL REESTABLECIDA Y LIMPIEZA
+          onSuccess() // Indica éxito para cualquier lógica externa (si aplica)
+          setFormData({ name: "", email: "", password: "", confirmPassword: "" })
+          onSwitchMode() // Cambia al modo Login automáticamente
         } else {
-          // Intenta parsear JSON, si falla, usa el texto de la respuesta
-          const errorBody = await response.json().catch(() => ({}));
-          const errorText = errorBody.message || errorBody.error || await response.text();
-          setError(`Error ${response.status}: ${errorText || 'El usuario ya existe o error desconocido.'}`);
+          // Manejo de errores 4xx o 5xx del servidor
+          const errorJson = await response.json().catch(() => ({ message: 'Error desconocido' }))
+          const errorMessage = `Error ${response.status}: ${errorJson.message || 'Error en el servidor.'}`
+          setError(`Error al registrar: ${errorMessage}`)
         }
       } catch (err) {
-        console.error("Error de red/servidor durante el registro:", err);
-        setError("🔴 No se pudo conectar con el servidor. Revisa tu conexión o intenta más tarde.");
+        // Manejo de errores de red
+        console.error("Error de red/servidor:", err)
+        setError("No se pudo conectar con el servidor. Verifica la URL de la API.")
       } finally {
-        setIsLoading(false);
+        setIsLoading(false)
       }
     } else {
-      // 🚀 LÓGICA DE INICIO DE SESIÓN (LOGIN)
+      // 1. VALIDACIONES LOCALES (LOGIN)
       if (!formData.email || !formData.password) {
-        setError("Por favor, completa el correo y la contraseña.");
-        setIsLoading(false);
-        return;
+        setMessage("Por favor, completa el correo y la contraseña.")
+        return
       }
 
+      // 2. PREPARACIÓN DE DATOS PARA EL BACKEND (LOGIN)
       const loginData = {
         correo: formData.email,
         password: formData.password,
-      };
+      }
 
+      setIsLoading(true)
+
+      // 3. LLAMADA AL BACKEND (LOGIN)
       try {
-        // 🔥 Usando el endpoint /usuarios/login
-        const response = await fetchWithRetry(`${API_BASE_URL}/usuarios/login`, {
+        // ASUMIMOS EL ENDPOINT /usuarios/login para la autenticación
+        const response = await fetch(`${API_BASE_URL}/usuarios/login`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify(loginData),
-        });
+        })
 
+        // 4. MANEJO DE RESPUESTA (LOGIN)
         if (response.ok) {
-          const userData = await response.json();
-          // Guarda la sesión en localStorage
-          localStorage.setItem('user_session', JSON.stringify(userData));
-          
-          setSuccessMessage("¡Inicio de sesión exitoso!");
+          // La respuesta puede contener un token JWT o datos del usuario (no implementado aquí)
+          const data = await response.json() // Usar 'data' si se necesita guardar el token
 
-          setTimeout(() => {
-            onSuccess(userData);
-            setFormData({ name: "", email: "", password: "", confirmPassword: "" });
-            onClose(); // Cierra el modal después del éxito
-          }, 1000);
-          
+          // ➡️ LÓGICA DEL MODAL REESTABLECIDA Y LIMPIEZA
+          setMessage("¡Inicio de sesión exitoso!")
+          onSuccess() // Cierra el modal
+          setFormData({ name: "", email: "", password: "", confirmPassword: "" }) // Limpia el formulario
         } else {
-          const errorBody = await response.json().catch(() => ({}));
-          const errorText = errorBody.message || errorBody.error || await response.text();
-          setError(`Error ${response.status}: ${errorText || 'Credenciales inválidas o error desconocido.'}`);
+          const errorJson = await response.json().catch(() => ({ message: 'Credenciales inválidas' }))
+          const errorMessage = `Error ${response.status}: ${errorJson.message || 'Credenciales inválidas.'}`
+          setError(`Error al iniciar sesión: ${errorMessage}`)
         }
       } catch (err) {
-        console.error("Error de red/servidor durante el login:", err);
-        setError("🔴 No se pudo conectar con el servidor. Revisa tu conexión o el CORS.");
+        console.error("Error de red/servidor:", err)
+        setError("No se pudo conectar con el servidor. Verifica la URL de la API.")
       } finally {
-        setIsLoading(false);
+        setIsLoading(false)
       }
     }
-  };
+  }
+  
+  // Determinar el color del mensaje de feedback (éxito vs. validación/error)
+  const isSuccess = message && message.includes("exitoso")
+  const messageColor = isSuccess ? "bg-green-600/20 border-green-500 text-green-300" : "bg-yellow-600/20 border-yellow-500 text-yellow-300"
+  const errorColor = "bg-red-600/20 border-red-500 text-red-300"
 
-  // Deshabilita el cierre y los botones si está cargando o hay un mensaje de éxito/error
-  const isAuthEnabled = !isLoading && !successMessage;
 
   return (
     <div
-      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 transition-opacity duration-300 backdrop-blur-sm"
-      // Cierra solo si no está en proceso
-      onClick={isAuthEnabled ? onClose : undefined}
-      role="dialog"
-      aria-modal="true"
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 font-inter transition-opacity duration-300"
+      onClick={onClose}
+      data-testid={`${mode}-modal`}
     >
       <div
-        className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-8 max-w-md w-full border-2 border-red-600 shadow-2xl transition-all duration-300 transform scale-100"
+        className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl shadow-2xl p-6 sm:p-8 max-w-sm sm:max-w-md w-full border border-red-700/50 transform transition-transform duration-300 scale-100"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center mb-6 border-b border-gray-700 pb-3">
-          <h2 className="text-2xl font-extrabold text-white flex items-center gap-2">
-            <LogIn className="w-7 h-7 text-red-500" />
+        {/* 🔹 Título y botón de cierre */}
+        <div className="flex justify-between items-center mb-6 border-b border-red-700/30 pb-3">
+          <h2
+            className="text-2xl font-extrabold text-red-500 tracking-wider"
+            data-testid={`${mode}-title`}
+          >
             {mode === "login" ? "INICIAR SESIÓN" : "REGISTRARSE"}
           </h2>
           <button
             onClick={onClose}
-            className="text-white p-2 text-2xl hover:text-red-500 transition-colors rounded-full hover:bg-gray-700 disabled:opacity-50"
-            disabled={!isAuthEnabled}
+            className="text-white text-2xl hover:text-red-500 transition-colors p-1 rounded-full hover:bg-gray-700/50"
+            data-testid={`${mode}-close`}
+            aria-label="Cerrar Modal"
           >
-            <X className="w-5 h-5"/>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
 
-        {(error || successMessage) && (
-          <p className={`text-center text-sm font-medium mb-4 p-3 rounded-lg border flex items-center justify-center gap-2 ${
-            error 
-              ? 'text-red-300 bg-red-900/30 border-red-500/50' 
-              : 'text-green-300 bg-green-900/30 border-green-500/50'
-          }`}>
-            {error ? <AlertTriangle className="w-4 h-4"/> : <Zap className="w-4 h-4"/>}
-            {error || successMessage}
-          </p>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* 🔹 Formulario principal */}
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-4"
+          data-testid={`${mode}-form`}
+        >
           
+          {/* 💡 Mensaje de Error (API/Red) */}
+          {error && (
+            <div className={`p-3 rounded-lg border text-sm font-semibold text-center ${errorColor}`}>
+                {error}
+            </div>
+          )}
+
+          {/* 💡 Mensaje de Feedback (Validación/Éxito) */}
+          {message && !error && (
+            <div className={`p-3 rounded-lg border text-sm font-semibold text-center ${messageColor}`}>
+                {message}
+            </div>
+          )}
+
           {mode === "register" && (
             <div>
-              <label className="block text-gray-300 text-sm font-semibold mb-1" htmlFor="name">
-                <User className="inline w-4 h-4 mr-1 text-red-500"/> NOMBRE:
+              <label
+                className="block text-gray-300 text-sm font-medium mb-1"
+                htmlFor="name"
+              >
+                NOMBRE DE USUARIO:
               </label>
               <input
                 type="text"
                 id="name"
+                placeholder="Tu nombre de usuario"
                 value={formData.name}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 bg-gray-700 text-white border-2 border-gray-600 rounded-lg focus:border-red-500 focus:ring-red-500 outline-none transition-all placeholder:text-gray-500"
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                className="w-full px-4 py-2 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-colors"
                 required
-                disabled={!isAuthEnabled}
-                placeholder="Nombre de usuario"
+                disabled={isLoading}
+                data-testid="register-name-input"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-gray-300 text-sm font-semibold mb-1" htmlFor="email">
-                <Mail className="inline w-4 h-4 mr-1 text-red-500"/> EMAIL:
+            <label
+              className="block text-gray-300 text-sm font-medium mb-1"
+              htmlFor="email"
+            >
+              EMAIL:
             </label>
             <input
               type="email"
               id="email"
-              value={formData.email}
-              onChange={handleInputChange}
-              className="w-full px-4 py-2 bg-gray-700 text-white border-2 border-gray-600 rounded-lg focus:border-red-500 focus:ring-red-500 outline-none transition-all placeholder:text-gray-500"
-              required
-              disabled={!isAuthEnabled}
               placeholder="correo@ejemplo.com"
+              value={formData.email}
+              onChange={(e) =>
+                setFormData({ ...formData, email: e.target.value })
+              }
+              className="w-full px-4 py-2 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-colors"
+              required
+              disabled={isLoading}
+              data-testid={`${mode}-email-input`}
             />
           </div>
 
           <div>
-            <label className="block text-gray-300 text-sm font-semibold mb-1" htmlFor="password">
-                <Lock className="inline w-4 h-4 mr-1 text-red-500"/> CONTRASEÑA:
+            <label
+              className="block text-gray-300 text-sm font-medium mb-1"
+              htmlFor="password"
+            >
+              CONTRASEÑA:
             </label>
             <input
               type="password"
               id="password"
-              value={formData.password}
-              onChange={handleInputChange}
-              className="w-full px-4 py-2 bg-gray-700 text-white border-2 border-gray-600 rounded-lg focus:border-red-500 focus:ring-red-500 outline-none transition-all placeholder:text-gray-500"
-              required
-              disabled={!isAuthEnabled}
               placeholder="Mínimo 6 caracteres"
+              value={formData.password}
+              onChange={(e) =>
+                setFormData({ ...formData, password: e.target.value })
+              }
+              className="w-full px-4 py-2 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-colors"
+              required
+              disabled={isLoading}
+              data-testid={`${mode}-password-input`}
             />
           </div>
 
           {mode === "register" && (
             <div>
-              <label className="block text-gray-300 text-sm font-semibold mb-1" htmlFor="confirmPassword">
-                <Lock className="inline w-4 h-4 mr-1 text-red-500"/> CONFIRMAR CONTRASEÑA:
+              <label
+                className="block text-gray-300 text-sm font-medium mb-1"
+                htmlFor="confirmPassword"
+              >
+                CONFIRMAR CONTRASEÑA:
               </label>
               <input
                 type="password"
                 id="confirmPassword"
+                placeholder="Repite tu contraseña"
                 value={formData.confirmPassword}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 bg-gray-700 text-white border-2 border-gray-600 rounded-lg focus:border-red-500 focus:ring-red-500 outline-none transition-all placeholder:text-gray-500"
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    confirmPassword: e.target.value,
+                  })
+                }
+                className="w-full px-4 py-2 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-colors"
                 required
-                disabled={!isAuthEnabled}
-                placeholder="Repite la contraseña"
+                disabled={isLoading}
+                data-testid="register-confirm-password-input"
               />
             </div>
           )}
 
+          {/* 🔹 Botón principal */}
           <button
             type="submit"
-            className="w-full bg-gradient-to-r from-red-600 to-red-800 hover:from-red-700 hover:to-red-900 text-white py-3 rounded-lg font-extrabold tracking-wide transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-red-900/40 hover:shadow-red-500/50"
-            disabled={!isAuthEnabled}
+            className="w-full mt-6 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-bold shadow-lg shadow-red-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            data-testid={`${mode}-submit`}
+            disabled={isLoading}
           >
-            {isLoading
-              ? <><Loader2 className="w-5 h-5 animate-spin" /> Procesando...</>
-              : mode === "login"
-              ? "INICIAR SESIÓN"
-              : "REGISTRARSE"}
+            {isLoading && (
+                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            )}
+            <span>
+                {isLoading
+                ? "PROCESANDO..."
+                : mode === "login"
+                ? "INICIAR SESIÓN"
+                : "REGISTRARSE"}
+            </span>
           </button>
         </form>
 
-        <div className="mt-6 text-center text-gray-400">
+        <div className="mt-6 text-center text-gray-400 text-sm">
           <p>
             {mode === "login"
               ? "¿No tienes cuenta?"
               : "¿Ya tienes cuenta?"}{" "}
             <button
-              onClick={onSwitchMode}
-              className="text-red-400 hover:text-red-300 font-bold transition-colors disabled:opacity-50"
-              disabled={!isAuthEnabled}
+              onClick={() => {
+                onSwitchMode()
+                setFormData({ name: "", email: "", password: "", confirmPassword: "" }) // Limpiar form al cambiar
+                setError(null)
+                setMessage(null)
+              }}
+              className="text-red-500 hover:text-red-400 font-bold transition-colors ml-1"
+              data-testid={`switch-to-${
+                mode === "login" ? "register" : "login"
+              }`}
             >
               {mode === "login" ? "REGISTRARSE" : "INICIAR SESIÓN"}
             </button>
@@ -308,106 +349,5 @@ function AuthModal({ isOpen, onClose, mode, onSuccess, onSwitchMode }) {
         </div>
       </div>
     </div>
-  );
-}
-
-
-// --- COMPONENTE PRINCIPAL DE LA APLICACIÓN (EXPORTACIÓN POR DEFECTO) ---
-
-export default function App() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState("login");
-  const [userData, setUserData] = useState(null);
-
-  // 1. Cargar la sesión desde localStorage al inicio
-  useEffect(() => {
-    try {
-      const storedSession = localStorage.getItem('user_session');
-      if (storedSession) {
-        const user = JSON.parse(storedSession);
-        setUserData(user);
-      }
-    } catch (e) {
-      console.error("Error al cargar la sesión de localStorage:", e);
-      localStorage.removeItem('user_session');
-    }
-  }, []);
-
-  const handleLoginSuccess = (user) => {
-    setUserData(user);
-    setIsModalOpen(false);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('user_session');
-    setUserData(null);
-    setIsModalOpen(false);
-  };
-
-  const openLogin = () => {
-    setAuthMode("login");
-    setIsModalOpen(true);
-  };
-
-  const openRegister = () => {
-    setAuthMode("register");
-    setIsModalOpen(true);
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4 font-sans">
-      <div className="w-full max-w-2xl bg-gray-800 p-8 rounded-2xl shadow-2xl border-t-4 border-red-600 text-center">
-        <h1 className="text-4xl font-black mb-4 text-red-500">
-          Autenticación Cliente-Servidor (Railway)
-        </h1>
-        
-        <p className="text-gray-400 mb-8">
-          Esta demo prueba la conexión de inicio de sesión/registro con tu backend Spring Boot alojado en Railway.
-        </p>
-
-        {userData ? (
-          <div className="p-6 bg-gray-700 rounded-xl border border-red-600">
-            <h2 className="text-2xl font-bold mb-2 flex items-center justify-center gap-2 text-green-400">
-              <Zap className="w-6 h-6"/> ¡Bienvenido!
-            </h2>
-            <p className="text-lg mb-4">
-              Has iniciado sesión como: <span className="font-mono text-red-300">{userData.correo}</span>
-            </p>
-            <p className="text-sm text-gray-300 mb-6">
-              Tu ID de usuario es: <span className="font-semibold">{userData.id}</span>
-            </p>
-            <button
-              onClick={handleLogout}
-              className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-full transition-colors flex items-center gap-2 mx-auto"
-            >
-              <LogOut className="w-5 h-5"/> Cerrar Sesión
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col sm:flex-row justify-center gap-4">
-            <button
-              onClick={openLogin}
-              className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center gap-2"
-            >
-              <LogIn className="w-5 h-5"/> Iniciar Sesión
-            </button>
-            <button
-              onClick={openRegister}
-              className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-red-400 font-bold rounded-lg transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center gap-2 border border-red-400"
-            >
-              <User className="w-5 h-5"/> Registrarse
-            </button>
-          </div>
-        )}
-      </div>
-
-      <AuthModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        mode={authMode}
-        onSuccess={handleLoginSuccess}
-        onSwitchMode={() => setAuthMode(authMode === "login" ? "register" : "login")}
-      />
-    </div>
-  );
+  )
 }
