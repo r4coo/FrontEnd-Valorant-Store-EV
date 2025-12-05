@@ -1,11 +1,14 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
+// Importaciones de Firebase para autenticación y base de datos
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { getFirestore, Firestore } from 'firebase/firestore'; 
+
 
 // =====================================================================
-// MOCK DE CONTEXTOS (Para asegurar la compilación en entorno de archivo único)
-// ⚠️ NOTA: En tu aplicación real, debes usar los archivos importados
-// "@/contexts/cart-context" y "./use-auth"
+// MOCK DE CONTEXTO DE CARRITO (Se mantiene el mock de productos)
 // =====================================================================
 
 interface CartItem {
@@ -14,11 +17,6 @@ interface CartItem {
     price: number;
     quantity: number;
     image?: string;
-}
-
-interface AuthUser {
-    name: string;
-    email: string;
 }
 
 // 🛒 MOCK DE useCart
@@ -32,7 +30,7 @@ const useCart = () => {
     const getTotalPrice = useMemo(() => () => DUMMY_CART_ITEMS.reduce((sum, item) => sum + item.price * item.quantity, 0), []);
 
     return {
-        cart: DUMMY_CART_ITEMS, // Usamos items fijos para este mock
+        cart: DUMMY_CART_ITEMS, 
         removeFromCart: (index: number) => console.log(`[MOCK] Eliminando ítem ${index}`),
         increaseQuantity: (index: number) => console.log(`[MOCK] Aumentando cantidad ${index}`),
         decreaseQuantity: (index: number) => console.log(`[MOCK] Disminuyendo cantidad ${index}`),
@@ -40,18 +38,6 @@ const useCart = () => {
         getTotalPrice,
     };
 };
-
-// 👤 MOCK DE useAuth
-// Simula un usuario autenticado para la demostración de la compra real
-const MOCK_AUTH_USER: AuthUser = {
-    name: "Usuario Autenticado (Real)",
-    email: "usuario.real@tienda.com"
-};
-
-const useAuth = () => ({
-    user: MOCK_AUTH_USER, // Usuario de ejemplo
-    isAuthenticated: true, // Siempre autenticado en este mock
-});
 // =====================================================================
 
 
@@ -60,11 +46,67 @@ interface CartModalProps {
   onClose: () => void
 }
 
+// Variables globales proporcionadas por el entorno de Canvas (Requeridas para Firebase)
+declare const __app_id: string;
+declare const __firebase_config: string;
+declare const __initial_auth_token: string | undefined;
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BACK
 
 export function CartModal({ isOpen, onClose }: CartModalProps) {
-  // 🟢 USAR HOOKS REALES: Obtener los datos del usuario autenticado
-  const { user, isAuthenticated } = useAuth() 
+  
+  // =====================================================================
+  // ESTADO DE AUTENTICACIÓN REAL (Firebase)
+  // =====================================================================
+  const [authReady, setAuthReady] = useState(false);
+  // El estado 'user' ahora almacena el objeto de usuario REAL de Firebase Auth
+  const [user, setUser] = useState<FirebaseUser | null>(null); 
+  const isAuthenticated = !!user;
+  const [db, setDb] = useState<Firestore | null>(null);
+
+  useEffect(() => {
+      let unsubscribe: () => void = () => {};
+      try {
+          const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+          const firebaseConfig = JSON.parse(__firebase_config);
+          const app = initializeApp(firebaseConfig);
+          const auth = getAuth(app);
+          const firestoreDb = getFirestore(app);
+          setDb(firestoreDb);
+
+          // 1. Inicio de Sesión
+          const signIn = async () => {
+              try {
+                  if (typeof __initial_auth_token !== 'undefined') {
+                      await signInWithCustomToken(auth, __initial_auth_token);
+                  } else {
+                      await signInAnonymously(auth);
+                  }
+              } catch (error) {
+                  console.error("Firebase Auth Error durante el inicio de sesión:", error);
+              }
+          };
+          
+          signIn();
+
+          // 2. Listener de Estado de Autenticación
+          unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+              setUser(currentUser);
+              setAuthReady(true);
+          });
+
+      } catch (error) {
+          console.error("Error de Inicialización de Firebase:", error);
+          setAuthReady(true); 
+      }
+
+      return () => {
+          // Limpia el listener de autenticación al desmontar
+          unsubscribe();
+      };
+  }, []);
+  // =====================================================================
+
 
   const { cart, removeFromCart, increaseQuantity, decreaseQuantity, clearCart, getTotalPrice } = useCart()
   
@@ -75,9 +117,9 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
   if (!isOpen) return null
 
   const handleCheckout = async () => {
-    // 0. Validar autenticación
-    if (!isAuthenticated || !user) {
-        setCheckoutMessage({ type: 'error', text: "Debes iniciar sesión para completar la compra." });
+    // 0. Validar estado de autenticación
+    if (!authReady || !isAuthenticated || !user) {
+        setCheckoutMessage({ type: 'error', text: "La autenticación no está lista o debes iniciar sesión para completar la compra." });
         return
     }
 
@@ -96,10 +138,11 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
     // 2. Preparar los datos de la orden
     const totalPrice = getTotalPrice()
     
-    // 🟢 USANDO DATOS REALES DEL USUARIO:
+    // 🟢 USANDO DATOS REALES DEL USUARIO DE FIREBASE:
     const orderData = {
-      nombreUsuario: user.name, // Usando el nombre real
-      correo: user.email,     // Usando el correo real
+      // Usamos displayName (nombre) o email (correo) del objeto User de Firebase
+      nombreUsuario: user.displayName || user.email || `ID Usuario ${user.uid}`, 
+      correo: user.email || 'sin-correo-disponible@firebase.com',     
       total: totalPrice,
       productos: cart.map(item => ({
         idProducto: item.id,
@@ -118,7 +161,7 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          // Aquí iría el Token JWT
+          // Aquí iría el Token JWT si fuera necesario para la API
         },
         body: JSON.stringify(orderData),
       })
@@ -151,9 +194,11 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
     }
   }
 
-  // Datos para mostrar en el placeholder
-  const displayedUserName = user?.name ?? "No Autenticado"
-  const displayedUserEmail = user?.email ?? "inicia.sesion@ejemplo.com"
+  // Datos REALES de Firebase para mostrar en la interfaz
+  // Utilizamos displayName o email para el nombre, y el email para el correo.
+  const displayedUserName = user?.displayName || user?.email || "No Autenticado (Anónimo)"
+  const displayedUserEmail = user?.email ?? "Sin correo registrado"
+  const displayedAuthStatus = authReady ? (isAuthenticated ? 'Autenticado' : 'Cargando/Sesión requerida') : 'Cargando...';
 
 
   return (
@@ -200,10 +245,14 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
           </div>
         )}
 
-        {/* Información del Usuario (REAL) */}
+        {/* Información del Usuario (REAL DE BASE DE DATOS/AUTH) */}
         <div className={`p-4 rounded-lg mb-6 text-sm ${isAuthenticated ? 'bg-gray-800 border border-green-500/50' : 'bg-red-900/20 border border-red-500/50'}`}>
             <p className="font-semibold text-white mb-2">Detalles del Comprador:</p>
-            <p className="text-gray-300">Estado: <span className={`font-bold ${isAuthenticated ? 'text-green-400' : 'text-red-400'}`}>{isAuthenticated ? 'Autenticado' : 'Sesión requerida'}</span></p>
+            <p className="text-gray-300">Estado: 
+                <span className={`font-bold ${isAuthenticated ? 'text-green-400' : 'text-red-400'}`}>
+                    {displayedAuthStatus}
+                </span>
+            </p>
             <p className="text-gray-300">Nombre: <span className="text-red-400">{displayedUserName}</span></p>
             <p className="text-gray-300">Email: <span className="text-red-400">{displayedUserEmail}</span></p>
             {!isAuthenticated && (
@@ -227,7 +276,7 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
                 data-testid={`cart-item-${index}`}
               >
                 <div className="relative w-20 h-20 flex-shrink-0">
-                  {/* 🟢 Reemplazando Next/Image por tag <img> estándar */}
+                  {/* Reemplazando Next/Image por tag <img> estándar */}
                   <img
                     src={item.image || "https://placehold.co/80x80/1f2937/FFFFFF?text=Product"}
                     alt={item.name}
@@ -296,8 +345,8 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
               onClick={handleCheckout}
               className="flex-1 bg-gradient-to-r from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 text-white py-3 rounded font-bold transition-all disabled:opacity-50 disabled:from-gray-600 disabled:to-gray-700"
               data-testid="cart-checkout"
-              // Se deshabilita si el carrito está vacío, está cargando, O NO está autenticado
-              disabled={cart.length === 0 || isLoading || !isAuthenticated} 
+              // Se deshabilita si el carrito está vacío, está cargando, o NO está autenticado/listo
+              disabled={cart.length === 0 || isLoading || !isAuthenticated || !authReady} 
             >
               {isLoading ? "PROCESANDO..." : "COMPRAR AHORA"}
             </button>
