@@ -1,14 +1,12 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
-// Importaciones de Firebase para autenticación y base de datos
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore'; 
-
+import { useState, useMemo } from "react"
 
 // =====================================================================
-// MOCK DE CONTEXTO DE CARRITO (Se mantiene el mock de productos)
+// DEFINICIONES DE CONTEXTO/HOOKS EXTERNOS (Simulados para compilación)
+// ⚠️ ATENCIÓN: Estas son interfaces placeholder. En tu proyecto real,
+// estos hooks deben ser importados desde sus respectivos archivos y
+// contener la lógica de conexión a tu backend (p. ej. Railway).
 // =====================================================================
 
 interface CartItem {
@@ -19,23 +17,47 @@ interface CartItem {
     image?: string;
 }
 
-// 🛒 MOCK DE useCart
-const DUMMY_CART_ITEMS: CartItem[] = [
-    { id: 101, name: "Espada de Energía", price: 150.00, quantity: 1, image: "https://placehold.co/80x80/22c55e/FFFFFF?text=E" },
-    { id: 102, name: "Armadura Pesada", price: 299.99, quantity: 2, image: "https://placehold.co/80x80/3b82f6/FFFFFF?text=A" },
-];
+interface UserData {
+    displayName: string | null;
+    email: string | null;
+    uid: string;
+}
 
+// 🛒 PLACEHOLDER para useCart
+// Se asume que este hook provee los datos del carrito desde tu backend.
 const useCart = () => {
-    // Usamos useMemo para simular el precio total y evitar errores de dependencia
-    const getTotalPrice = useMemo(() => () => DUMMY_CART_ITEMS.reduce((sum, item) => sum + item.price * item.quantity, 0), []);
+    // Usamos datos de ejemplo solo para que la interfaz se vea con contenido.
+    // Reemplaza esto con tu estado real del carrito.
+    const EXTERNAL_CART_ITEMS: CartItem[] = [
+        { id: 101, name: "Espada de Energía", price: 150.00, quantity: 1, image: "https://placehold.co/80x80/22c55e/FFFFFF?text=E" },
+        { id: 102, name: "Armadura Pesada", price: 299.99, quantity: 2, image: "https://placehold.co/80x80/3b82f6/FFFFFF?text=A" },
+    ];
+    
+    const getTotalPrice = useMemo(() => () => EXTERNAL_CART_ITEMS.reduce((sum, item) => sum + item.price * item.quantity, 0), []);
 
     return {
-        cart: DUMMY_CART_ITEMS, 
-        removeFromCart: (index: number) => console.log(`[MOCK] Eliminando ítem ${index}`),
-        increaseQuantity: (index: number) => console.log(`[MOCK] Aumentando cantidad ${index}`),
-        decreaseQuantity: (index: number) => console.log(`[MOCK] Disminuyendo cantidad ${index}`),
-        clearCart: () => console.log("[MOCK] Vaciando carrito"),
+        cart: EXTERNAL_CART_ITEMS, 
+        removeFromCart: (index: number) => console.log(`[PLACEHOLDER] Eliminando ítem ${index}`),
+        increaseQuantity: (index: number) => console.log(`[PLACEHOLDER] Aumentando cantidad ${index}`),
+        decreaseQuantity: (index: number) => console.log(`[PLACEHOLDER] Disminuyendo cantidad ${index}`),
+        clearCart: () => console.log("[PLACEHOLDER] Vaciando carrito"),
         getTotalPrice,
+    };
+};
+
+// 👤 PLACEHOLDER para useAuth
+// Se asume que este hook provee el estado de autenticación real.
+const useAuth = () => {
+    // Asume un usuario autenticado para la demostración, con datos reales
+    const REAL_USER_DATA: UserData = {
+        displayName: "John Doe (DB Railway)",
+        email: "john.doe@railway.com",
+        uid: "railway-user-123",
+    };
+
+    return {
+        user: REAL_USER_DATA, // Usuario real simulado
+        isAuthenticated: true, // Estado real simulado
     };
 };
 // =====================================================================
@@ -46,68 +68,13 @@ interface CartModalProps {
   onClose: () => void
 }
 
-// Variables globales proporcionadas por el entorno de Canvas (Requeridas para Firebase)
-declare const __app_id: string;
-declare const __firebase_config: string;
-declare const __initial_auth_token: string | undefined;
-
+// La URL base para el backend (donde estaría alojada la DB Railway)
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BACK
 
 export function CartModal({ isOpen, onClose }: CartModalProps) {
   
-  // =====================================================================
-  // ESTADO DE AUTENTICACIÓN REAL (Firebase)
-  // =====================================================================
-  const [authReady, setAuthReady] = useState(false);
-  // El estado 'user' ahora almacena el objeto de usuario REAL de Firebase Auth
-  const [user, setUser] = useState<FirebaseUser | null>(null); 
-  const isAuthenticated = !!user;
-  const [db, setDb] = useState<Firestore | null>(null);
-
-  useEffect(() => {
-      let unsubscribe: () => void = () => {};
-      try {
-          const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-          const firebaseConfig = JSON.parse(__firebase_config);
-          const app = initializeApp(firebaseConfig);
-          const auth = getAuth(app);
-          const firestoreDb = getFirestore(app);
-          setDb(firestoreDb);
-
-          // 1. Inicio de Sesión
-          const signIn = async () => {
-              try {
-                  if (typeof __initial_auth_token !== 'undefined') {
-                      await signInWithCustomToken(auth, __initial_auth_token);
-                  } else {
-                      await signInAnonymously(auth);
-                  }
-              } catch (error) {
-                  console.error("Firebase Auth Error durante el inicio de sesión:", error);
-              }
-          };
-          
-          signIn();
-
-          // 2. Listener de Estado de Autenticación
-          unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-              setUser(currentUser);
-              setAuthReady(true);
-          });
-
-      } catch (error) {
-          console.error("Error de Inicialización de Firebase:", error);
-          setAuthReady(true); 
-      }
-
-      return () => {
-          // Limpia el listener de autenticación al desmontar
-          unsubscribe();
-      };
-  }, []);
-  // =====================================================================
-
-
+  // 🟢 Se utiliza el hook que asume la conexión con el backend (Railway)
+  const { user, isAuthenticated } = useAuth() 
   const { cart, removeFromCart, increaseQuantity, decreaseQuantity, clearCart, getTotalPrice } = useCart()
   
   // Estados para manejar la compra
@@ -118,8 +85,8 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
 
   const handleCheckout = async () => {
     // 0. Validar estado de autenticación
-    if (!authReady || !isAuthenticated || !user) {
-        setCheckoutMessage({ type: 'error', text: "La autenticación no está lista o debes iniciar sesión para completar la compra." });
+    if (!isAuthenticated || !user) {
+        setCheckoutMessage({ type: 'error', text: "Debes iniciar sesión para completar la compra." });
         return
     }
 
@@ -138,11 +105,11 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
     // 2. Preparar los datos de la orden
     const totalPrice = getTotalPrice()
     
-    // 🟢 USANDO DATOS REALES DEL USUARIO DE FIREBASE:
+    // 🟢 USANDO DATOS REALES DEL USUARIO OBTENIDOS DEL useAuth (conectado al backend)
     const orderData = {
-      // Usamos displayName (nombre) o email (correo) del objeto User de Firebase
+      // Usamos displayName (nombre) o email (correo)
       nombreUsuario: user.displayName || user.email || `ID Usuario ${user.uid}`, 
-      correo: user.email || 'sin-correo-disponible@firebase.com',     
+      correo: user.email || 'sin-correo-disponible@auth.com',     
       total: totalPrice,
       productos: cart.map(item => ({
         idProducto: item.id,
@@ -155,13 +122,15 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
     setIsLoading(true)
     setCheckoutMessage(null)
 
-    // 3. Llamada a la API
+    // 3. Llamada a la API (Se asume que este API interactúa con la base de datos de Railway)
     try {
+      console.log(`Enviando orden a ${API_BASE_URL}/ventas. Se asume que este endpoint gestiona la DB Railway.`);
+      
       const response = await fetch(`${API_BASE_URL}/ventas`, { 
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          // Aquí iría el Token JWT si fuera necesario para la API
+          // Aquí iría el Token JWT si fuera necesario para tu backend
         },
         body: JSON.stringify(orderData),
       })
@@ -173,7 +142,7 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
             type: 'success', 
             text: `¡Compra exitosa! Total pagado: $${totalPrice.toFixed(2)}. ID de venta: ${result.id || 'N/A'}` 
         })
-        // clearCart() // Comentado en el mock para mantener los ítems visibles
+        // clearCart() 
       } else {
         // Error de la API (ej. 400, 500)
         const errorJson = await response.json().catch(() => ({}))
@@ -194,11 +163,10 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
     }
   }
 
-  // Datos REALES de Firebase para mostrar en la interfaz
-  // Utilizamos displayName o email para el nombre, y el email para el correo.
-  const displayedUserName = user?.displayName || user?.email || "No Autenticado (Anónimo)"
-  const displayedUserEmail = user?.email ?? "Sin correo registrado"
-  const displayedAuthStatus = authReady ? (isAuthenticated ? 'Autenticado' : 'Cargando/Sesión requerida') : 'Cargando...';
+  // Datos REALES obtenidos del useAuth
+  const displayedUserName = user?.displayName || user?.email || "No Autenticado"
+  const displayedUserEmail = user?.email ?? "inicia.sesion@ejemplo.com"
+  const displayedAuthStatus = isAuthenticated ? 'Autenticado' : 'Sesión requerida';
 
 
   return (
@@ -245,7 +213,7 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
           </div>
         )}
 
-        {/* Información del Usuario (REAL DE BASE DE DATOS/AUTH) */}
+        {/* Información del Usuario (REAL DE useAuth) */}
         <div className={`p-4 rounded-lg mb-6 text-sm ${isAuthenticated ? 'bg-gray-800 border border-green-500/50' : 'bg-red-900/20 border border-red-500/50'}`}>
             <p className="font-semibold text-white mb-2">Detalles del Comprador:</p>
             <p className="text-gray-300">Estado: 
@@ -345,8 +313,8 @@ export function CartModal({ isOpen, onClose }: CartModalProps) {
               onClick={handleCheckout}
               className="flex-1 bg-gradient-to-r from-green-600 to-green-800 hover:from-green-700 hover:to-green-900 text-white py-3 rounded font-bold transition-all disabled:opacity-50 disabled:from-gray-600 disabled:to-gray-700"
               data-testid="cart-checkout"
-              // Se deshabilita si el carrito está vacío, está cargando, o NO está autenticado/listo
-              disabled={cart.length === 0 || isLoading || !isAuthenticated || !authReady} 
+              // Se deshabilita si el carrito está vacío, está cargando, o NO está autenticado
+              disabled={cart.length === 0 || isLoading || !isAuthenticated} 
             >
               {isLoading ? "PROCESANDO..." : "COMPRAR AHORA"}
             </button>
